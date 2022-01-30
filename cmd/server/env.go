@@ -3,6 +3,7 @@ package main
 import (
 	"fmt"
 	"os"
+	"strconv"
 )
 
 type envConfig struct {
@@ -12,6 +13,10 @@ type envConfig struct {
 	mongoDBName                       string
 	mongoFriendsCollectionName        string
 	mongoFriendRequestsCollectionName string
+	kafkaBroker                       string
+	kafkaTopic                        string
+	kafkaGroupID                      string
+	eventsTimeout                     int
 }
 
 func loadEnvConfig() (*envConfig, error) {
@@ -45,6 +50,31 @@ func loadEnvConfig() (*envConfig, error) {
 	}
 
 	cfg.mongoConnString, err = lookupEnv("MONGO_CONN_STRING")
+	if err != nil {
+		return nil, err
+	}
+
+	cfg.kafkaBroker, err = lookupEnv("KAFKA_BROKER")
+	if err != nil {
+		return nil, err
+	}
+
+	cfg.kafkaTopic, err = lookupEnv("KAFKA_TOPIC")
+	if err != nil {
+		return nil, err
+	}
+
+	cfg.kafkaGroupID, err = lookupEnv("KAFKA_GROUP_ID")
+	if err != nil {
+		return nil, err
+	}
+
+	timeoutString, err := lookupEnv("TIMEOUT")
+	if err != nil {
+		return nil, err
+	}
+
+	cfg.eventsTimeout, err = strconv.Atoi(timeoutString)
 	if err != nil {
 		return nil, err
 	}

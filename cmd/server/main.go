@@ -7,10 +7,13 @@ import (
 	"os/signal"
 	"sync"
 	"syscall"
+	"time"
 
 	"github.com/daniilty/sharenote-friends/internal/core"
+	"github.com/daniilty/sharenote-friends/internal/kafka"
 	"github.com/daniilty/sharenote-friends/internal/mongo"
 	"github.com/daniilty/sharenote-friends/internal/server"
+	"github.com/daniilty/sharenote-friends/internal/users"
 	schema "github.com/daniilty/sharenote-grpc-schema"
 	"go.uber.org/zap"
 	"google.golang.org/grpc"
@@ -62,13 +65,23 @@ func run() error {
 
 	httpServer := server.NewHTTP(cfg.httpAddr, logger.Sugar(), service)
 
+	consumer := kafka.NewConsumerImpl(cfg.kafkaTopic, []string{cfg.kafkaBroker}, cfg.kafkaGroupID)
+
+	usersHandler := users.NewEventsHandler(logger.Sugar(), time.Duration(cfg.eventsTimeout)*time.Second, d, consumer)
+
 	wg := &sync.WaitGroup{}
 
 	wg.Add(1)
-	go func(ctx context.Context) {
+	go func() {
 		httpServer.Run(ctx)
 		wg.Done()
-	}(ctx)
+	}()
+
+	wg.Add(1)
+	go func() {
+		usersHandler.Listen(ctx)
+		wg.Done()
+	}()
 
 	termChan := make(chan os.Signal, 1)
 	signal.Notify(termChan, os.Interrupt, syscall.SIGINT, syscall.SIGTERM)

@@ -16,6 +16,8 @@ type DB interface {
 	GetFriendRequests(context.Context, string) (*FriendRequests, error)
 	// UpdateFriendRequests - update or insert friend requests for user.
 	UpdateFriendRequests(context.Context, *FriendRequests) error
+	// RemoveUser - remove user's requests and friends.
+	RemoveUser(context.Context, string) error
 	// GetFriends - get user friends.
 	GetFriends(context.Context, string) (*Friends, error)
 	// AddFriend - make transaction and add user to friends list.
