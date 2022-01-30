@@ -105,6 +105,20 @@ func (d *DBImpl) AddFriend(ctx context.Context, from string, to string) (bool, e
 	return true, nil
 }
 
+func (d *DBImpl) RemoveUser(ctx context.Context, uid string) error {
+	session, err := d.mongoDB.Client().StartSession()
+	if err != nil {
+		return fmt.Errorf("failed to start session: %w", err)
+	}
+	defer session.EndSession(ctx)
+
+	transaction := d.getRemoveUserTransaction(uid)
+
+	_, err = session.WithTransaction(ctx, transaction)
+
+	return err
+}
+
 func (d *DBImpl) RemoveFriend(ctx context.Context, from string, to string) (bool, error) {
 	session, err := d.mongoDB.Client().StartSession()
 	if err != nil {
@@ -132,6 +146,40 @@ func (d *DBImpl) UpdateFriends(ctx context.Context, f *Friends) error {
 	opts := options.Update().SetUpsert(true)
 
 	_, err := d.friendsCollection.UpdateOne(ctx, filter, update, opts)
+
+	return err
+}
+
+func (d *DBImpl) DeleteUsersFriends(ctx context.Context, uid string) error {
+	filter := bson.M{"uid": uid}
+
+	_, err := d.friendsCollection.DeleteOne(ctx, filter)
+
+	return err
+}
+
+func (d *DBImpl) DeleteUserFromFriends(ctx context.Context, uid string) error {
+	filter := bson.M{}
+	update := bson.M{"$pull": bson.M{"friend_ids": uid}}
+
+	_, err := d.friendsCollection.UpdateOne(ctx, filter, update)
+
+	return err
+}
+
+func (d *DBImpl) DeleteUsersFriendRequests(ctx context.Context, uid string) error {
+	filter := bson.M{"uid": uid}
+
+	_, err := d.friendRequestsCollection.DeleteOne(ctx, filter)
+
+	return err
+}
+
+func (d *DBImpl) DeleteUserFromFriendRequests(ctx context.Context, uid string) error {
+	filter := bson.M{}
+	update := bson.M{"$pull": bson.M{"friend_ids": uid}}
+
+	_, err := d.friendRequestsCollection.UpdateOne(ctx, filter, update)
 
 	return err
 }
@@ -222,6 +270,32 @@ func (d *DBImpl) getRemoveFriendTransaction(from string, to string) transactionF
 		err = d.UpdateFriends(sessCtx, fromFriends)
 		if err != nil {
 			return nil, fmt.Errorf("update from friends: %w", err)
+		}
+
+		return nil, nil
+	}
+}
+
+func (d *DBImpl) getRemoveUserTransaction(uid string) transactionFunc {
+	return func(sessCtx mongo.SessionContext) (interface{}, error) {
+		err := d.DeleteUserFromFriendRequests(sessCtx, uid)
+		if err != nil {
+			return nil, fmt.Errorf("delete user from friend requests: %w", err)
+		}
+
+		err = d.DeleteUserFromFriends(sessCtx, uid)
+		if err != nil {
+			return nil, fmt.Errorf("delete user from friends: %w", err)
+		}
+
+		err = d.DeleteUsersFriendRequests(sessCtx, uid)
+		if err != nil {
+			return nil, fmt.Errorf("delete users friend requests: %w", err)
+		}
+
+		err = d.DeleteUsersFriends(sessCtx, uid)
+		if err != nil {
+			return nil, fmt.Errorf("delete users friends: %w", err)
 		}
 
 		return nil, nil
